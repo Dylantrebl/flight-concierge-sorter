@@ -1,6 +1,19 @@
 # Flight Concierge Sorter – Custom Apify Actor
 
-Our own Apify actor that **sorts flight offers** by price, duration, stops, departure time, or preference score. Use it standalone or chain it after other actors (e.g. Skyscanner/Kayak scrapers).
+Our own Apify actor that **filters and sorts** flight offers using the **same criteria and settings as Flight Concierge**: max price, min price, max stops, direct-airline-only, include/exclude airlines, then sort by price, duration, stops, departure, or score.
+
+## Filter options (same as Flight Concierge)
+
+| Input | Description |
+|-------|-------------|
+| `maxPrice` | Only offers at or below this price |
+| `minPrice` | Only offers at or above this price |
+| `maxStops` | Only offers with at most this many stops (0 = direct only) |
+| `directOnly` | If true, only keep direct airline booking URLs (exclude OTAs like Kayak/Expedia) |
+| `includeAirlines` | Only offers that have at least one leg with these carrier codes (e.g. `["AA", "UA"]`) |
+| `excludeAirlines` | Exclude offers that have any leg with these carrier codes |
+
+All filter fields are optional. Filters are applied first, then sort.
 
 ## Sort options
 
@@ -18,15 +31,15 @@ Our own Apify actor that **sorts flight offers** by price, duration, stops, depa
 
 ## Input
 
-- **flightOffers** (array): Flight offer objects. Each item can have:
+- **flightOffers** (array): Flight offer objects (e.g. from Skyscanner/Kayak actors). Each item can have:
   - `price` (number or `{ amount, currency }`)
-  - `totalDurationMinutes` / `duration` / `durationMinutes`
-  - `stops` or derived from `legs`/`segments`
-  - `legs[].departure.time` (or `date`) for departure sort
+  - `totalDurationMinutes`, `stops`, `legs`/`segments` (with `carrier`, `departure.time`)
+  - `bookingUrl` (used for direct-only filter)
   - `preferenceScore` for score sort
-- **sortBy** (string): One of the options above (default: `price_asc`).
+- **sortBy** (string): One of the sort options above (default: `price_asc`).
+- **maxPrice**, **minPrice**, **maxStops**, **directOnly**, **includeAirlines**, **excludeAirlines**: optional filters (see table above).
 
-Output is the same array, in sorted order, in the run’s default dataset.
+Output is filtered then sorted, one item per dataset row.
 
 ## Run locally
 

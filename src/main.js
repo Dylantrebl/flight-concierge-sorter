@@ -1,11 +1,24 @@
 /**
  * Flight Concierge Sorter - Custom Apify Actor
- * Sorts flight offers by price, duration, stops, departure time, or preference score.
- * Input: flightOffers (array), sortBy (string).
- * Output: same items in sorted order in the default dataset.
+ * Filters and sorts flight offers using the same criteria as Flight Concierge:
+ * maxPrice, minPrice, maxStops, directOnly, includeAirlines, excludeAirlines + sortBy.
+ * Output: filtered and sorted items in the default dataset.
  */
 
 const { Actor } = require('apify');
+
+// Same OTA/airline domains as backend DirectOnlyFilterService
+const OTA_DOMAINS = new Set([
+    'expedia.com', 'booking.com', 'priceline.com', 'kayak.com',
+    'orbitz.com', 'travelocity.com', 'cheaptickets.com',
+    'hotwire.com', 'agoda.com', 'hotels.com'
+]);
+const AIRLINE_DOMAINS = new Set([
+    'united.com', 'aa.com', 'delta.com', 'southwest.com',
+    'jetblue.com', 'alaskaair.com', 'britishairways.com',
+    'lufthansa.com', 'airfrance.com', 'klm.com',
+    'virgin-atlantic.com', 'qantas.com', 'emirates.com'
+]);
 
 const SORT_OPTIONS = {
     price_asc: 'price_asc',
@@ -57,6 +70,69 @@ function getPreferenceScore(item) {
     const s = item.preferenceScore;
     if (typeof s === 'number') return s;
     return null;
+}
+
+function getCarriers(item) {
+    const legs = item.legs || item.segments || item.flights;
+    if (!Array.isArray(legs)) return [];
+    return legs.map(leg => leg.carrier || leg.airline).filter(Boolean);
+}
+
+function extractDomain(url) {
+    if (typeof url !== 'string' || !url.trim()) return null;
+    try {
+        const u = new URL(url.startsWith('http') ? url : 'https://' + url);
+        const host = u.hostname.toLowerCase();
+        return host.replace(/^www\./, '');
+    } catch {
+        return null;
+    }
+}
+
+function isDirectAirline(item) {
+    if (item.isDirectAirline === true) return true;
+    const url = item.bookingUrl || item.bookingLink || item.url || '';
+    if (!url || !url.trim()) return false;
+    const domain = extractDomain(url);
+    if (!domain) return false;
+    if (AIRLINE_DOMAINS.has(domain)) return true;
+    if (OTA_DOMAINS.has(domain)) return false;
+    const legs = item.legs || item.segments || item.flights;
+    const carrier = Array.isArray(legs) && legs[0] ? (legs[0].carrier || legs[0].airline) : null;
+    if (carrier && domain.includes(carrier.toLowerCase())) return true;
+    return false;
+}
+
+function applyFilters(offers, input) {
+    let out = [...offers];
+    const maxPrice = input.maxPrice != null ? Number(input.maxPrice) : null;
+    const minPrice = input.minPrice != null ? Number(input.minPrice) : null;
+    const maxStops = input.maxStops != null ? Number(input.maxStops) : null;
+    const directOnly = input.directOnly === true;
+    const includeAirlines = Array.isArray(input.includeAirlines) ? input.includeAirlines.map(String) : [];
+    const excludeAirlines = Array.isArray(input.excludeAirlines) ? input.excludeAirlines.map(String) : [];
+
+    if (minPrice != null && !Number.isNaN(minPrice)) {
+        out = out.filter(o => (getPrice(o) ?? 0) >= minPrice);
+    }
+    if (maxPrice != null && !Number.isNaN(maxPrice)) {
+        out = out.filter(o => (getPrice(o) ?? Infinity) <= maxPrice);
+    }
+    if (maxStops != null && !Number.isNaN(maxStops)) {
+        out = out.filter(o => (getStops(o) ?? Infinity) <= maxStops);
+    }
+    if (directOnly) {
+        out = out.filter(o => isDirectAirline(o));
+    }
+    if (includeAirlines.length > 0) {
+        const set = new Set(includeAirlines.map(s => s.toUpperCase()));
+        out = out.filter(o => getCarriers(o).some(c => set.has(String(c).toUpperCase())));
+    }
+    if (excludeAirlines.length > 0) {
+        const set = new Set(excludeAirlines.map(s => s.toUpperCase()));
+        out = out.filter(o => !getCarriers(o).some(c => set.has(String(c).toUpperCase())));
+    }
+    return out;
 }
 
 function compare(sortBy, a, b) {
@@ -116,15 +192,18 @@ Actor.main(async () => {
     const { flightOffers = [], sortBy = SORT_OPTIONS.price_asc } = input;
 
     if (!Array.isArray(flightOffers) || flightOffers.length === 0) {
-        Actor.log.info('No flight offers to sort.');
+        Actor.log.info('No flight offers to process.');
         return;
     }
 
+    const filtered = applyFilters(flightOffers, input);
+    Actor.log.info(`Filtered: ${flightOffers.length} -> ${filtered.length} offers`);
+
     const validSort = Object.values(SORT_OPTIONS).includes(sortBy) ? sortBy : SORT_OPTIONS.price_asc;
-    const sorted = [...flightOffers].sort((a, b) => compare(validSort, a, b));
+    const sorted = [...filtered].sort((a, b) => compare(validSort, a, b));
 
     for (const item of sorted) {
         await Actor.pushData(item);
     }
-    Actor.log.info(`Sorted ${sorted.length} flight offers by: ${validSort}`);
+    Actor.log.info(`Filtered and sorted ${sorted.length} flight offers by: ${validSort}`);
 });

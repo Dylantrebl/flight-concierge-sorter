@@ -1,26 +1,28 @@
 {
   "title": "Flight Concierge Sorter input",
-  "description": "Provide flight offers (from another actor or API) and choose how to sort them. Output is the same items in sorted order.",
+  "description": "Provide flight offers and optional filters (same criteria as Flight Concierge). Output is filtered and sorted.",
   "type": "object",
   "schemaVersion": 1,
   "properties": {
     "flightOffers": {
       "title": "Flight offers",
       "type": "array",
-      "description": "Array of flight offer objects. Each item should have at least one of: price (or price.amount), totalDurationMinutes, stops, legs (with departure times). Compatible with Skyscanner/Kayak Apify actor output.",
+      "description": "Array of flight offer objects. Compatible with Skyscanner/Kayak Apify actor output.",
       "editor": "json",
       "prefill": [
         {
           "price": { "amount": 250, "currency": "USD" },
           "totalDurationMinutes": 320,
           "stops": 0,
-          "legs": [{ "departure": { "time": "2025-03-15T08:00:00" } }]
+          "legs": [{ "carrier": "AA", "departure": { "time": "2025-03-15T08:00:00" } }],
+          "bookingUrl": "https://www.aa.com/booking"
         },
         {
           "price": { "amount": 180, "currency": "USD" },
           "totalDurationMinutes": 420,
           "stops": 1,
-          "legs": [{ "departure": { "time": "2025-03-15T06:30:00" } }]
+          "legs": [{ "carrier": "UA", "departure": { "time": "2025-03-15T06:30:00" } }],
+          "bookingUrl": "https://www.united.com/"
         }
       ]
     },
@@ -51,6 +53,45 @@
         "Departure (latest first)",
         "Preference score (best first)"
       ]
+    },
+    "maxPrice": {
+      "title": "Max price",
+      "type": "number",
+      "description": "Only include offers with price at or below this (same as Flight Concierge filter).",
+      "nullable": true
+    },
+    "minPrice": {
+      "title": "Min price",
+      "type": "number",
+      "description": "Only include offers with price at or above this.",
+      "nullable": true
+    },
+    "maxStops": {
+      "title": "Max stops",
+      "type": "integer",
+      "description": "Only include offers with at most this many stops (0 = direct only).",
+      "nullable": true,
+      "minimum": 0
+    },
+    "directOnly": {
+      "title": "Direct airline only",
+      "type": "boolean",
+      "description": "If true, only keep offers from direct airline booking URLs (exclude OTAs like Kayak/Expedia).",
+      "default": false
+    },
+    "includeAirlines": {
+      "title": "Include airlines",
+      "type": "array",
+      "description": "Only include offers that have at least one leg with these carrier codes (IATA, e.g. AA, UA).",
+      "editor": "stringList",
+      "nullable": true
+    },
+    "excludeAirlines": {
+      "title": "Exclude airlines",
+      "type": "array",
+      "description": "Exclude offers that have any leg with these carrier codes.",
+      "editor": "stringList",
+      "nullable": true
     }
   },
   "required": ["flightOffers", "sortBy"]
