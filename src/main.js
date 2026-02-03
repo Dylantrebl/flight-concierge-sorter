@@ -6,7 +6,13 @@
  */
 
 const { Actor, log: apifyLog } = require('apify');
-const log = apifyLog && typeof apifyLog.info === 'function' ? apifyLog : { info: (...args) => console.log(...args), debug: console.log, warn: console.warn, error: console.error };
+const rawLog = apifyLog && typeof apifyLog.info === 'function' ? apifyLog : { info: (...args) => console.log(...args), debug: console.log, warn: console.warn, error: console.error };
+const log = {
+    info: rawLog.info.bind(rawLog),
+    debug: typeof rawLog.debug === 'function' ? rawLog.debug.bind(rawLog) : (...a) => console.log(...a),
+    warn: typeof rawLog.warn === 'function' ? rawLog.warn.bind(rawLog) : (...a) => (rawLog.info ? rawLog.info(...a) : console.warn(...a)),
+    error: typeof rawLog.error === 'function' ? rawLog.error.bind(rawLog) : (...a) => console.error(...a)
+};
 const { fetchFromSkyscanner } = require('./sources/fetchSkyscanner');
 const { fetchFromKayak } = require('./sources/fetchKayak');
 
