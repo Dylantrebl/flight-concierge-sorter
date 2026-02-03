@@ -94,12 +94,12 @@
         "Preference score (best first)"
       ]
     },
-    "maxPrice": { "title": "Max price", "type": "number", "editor": "number", "nullable": true },
-    "minPrice": { "title": "Min price", "type": "number", "editor": "number", "nullable": true },
-    "maxStops": { "title": "Max stops", "type": "integer", "editor": "number", "nullable": true, "minimum": 0 },
-    "directOnly": { "title": "Direct airline only", "type": "boolean", "editor": "checkbox", "default": false },
-    "includeAirlines": { "title": "Include airlines", "type": "array", "editor": "stringList", "nullable": true },
-    "excludeAirlines": { "title": "Exclude airlines", "type": "array", "editor": "stringList", "nullable": true }
+    "maxPrice": { "title": "Max price", "type": "number", "description": "Only include offers with price at or below this.", "editor": "number", "nullable": true },
+    "minPrice": { "title": "Min price", "type": "number", "description": "Only include offers with price at or above this.", "editor": "number", "nullable": true },
+    "maxStops": { "title": "Max stops", "type": "integer", "description": "Only include offers with at most this many stops (0 = direct only).", "editor": "number", "nullable": true, "minimum": 0 },
+    "directOnly": { "title": "Direct airline only", "type": "boolean", "description": "If true, only keep offers from direct airline booking URLs (exclude OTAs).", "editor": "checkbox", "default": false },
+    "includeAirlines": { "title": "Include airlines", "type": "array", "description": "Only include offers that have at least one leg with these carrier codes (e.g. AA, UA).", "editor": "stringList", "nullable": true },
+    "excludeAirlines": { "title": "Exclude airlines", "type": "array", "description": "Exclude offers that have any leg with these carrier codes.", "editor": "stringList", "nullable": true }
   },
   "required": ["sortBy"]
 }
