@@ -141,7 +141,8 @@ async function fetchFromSkyscanner(input, log) {
 
         if (!hasFlightData(body)) {
             await browser.close().catch(() => {});
-            throw new Error('Skyscanner: No flight data in intercepted response. Retry with new proxy.');
+            log.warn('Skyscanner: No flight data in intercepted response.');
+            return [];
         }
 
         const offers = normalizeBodyToOffers(body, log);
@@ -152,8 +153,8 @@ async function fetchFromSkyscanner(input, log) {
         return offers;
     } catch (e) {
         if (browser) await browser.close().catch(() => {});
-        log.warn('Skyscanner fetch failed: ' + (e && e.message));
-        throw e;
+        log.warn('Skyscanner fetch failed (returning 0 offers): ' + (e && e.message));
+        return [];
     }
 }
 

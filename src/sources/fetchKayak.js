@@ -8,7 +8,11 @@ const { chromium } = require('playwright');
 const { Actor } = require('apify');
 
 const BASE = 'https://www.kayak.com';
-const POLL_URL_SUBSTRING = '/s/horizon/flights/results/Poll';
+// Match Poll endpoint (path can vary: /s/horizon/flights/results/Poll or similar)
+function isPollUrl(url) {
+    const u = (url || '').toLowerCase();
+    return u.includes('flights') && u.includes('results') && u.includes('poll');
+}
 const INTERCEPT_TIMEOUT_MS = 45000;
 
 function buildSearchUrl(origin, destination, departDate, returnDate, adults = 1, cabinClass = 'economy') {
@@ -82,7 +86,7 @@ function normalizePollBodyToOffers(body, log) {
 
 /**
  * Fetch from Kayak via Hybrid Interception: goto page, wait for Poll JSON, normalize, close browser.
- * Uses residential proxy when running on Apify. Throws after 45s if no flight data (triggers retry with new IP).
+ * Uses residential proxy when running on Apify. On timeout or no flight data, returns [] so the run can complete with other sources.
  *
  * @param {{ origin: string, destination: string, departDate: string, returnDate?: string, adults?: number, cabinClass?: string }} input
  * @param {{ info: Function, warn: Function, debug?: Function }} log
@@ -123,7 +127,7 @@ async function fetchFromKayak(input, log) {
         const page = await browser.newPage();
 
         const responsePromise = page.waitForResponse(
-            (resp) => resp.url().includes(POLL_URL_SUBSTRING) && resp.ok(),
+            (resp) => isPollUrl(resp.url()) && resp.ok(),
             { timeout: INTERCEPT_TIMEOUT_MS }
         );
 
@@ -134,7 +138,8 @@ async function fetchFromKayak(input, log) {
 
         if (!hasFlightData(body)) {
             await browser.close().catch(() => {});
-            throw new Error('Kayak: No flight data in Poll response (missing itineraryId/itineraries). Retry with new proxy.');
+            log.warn('Kayak: No flight data in Poll response (missing itineraryId/itineraries).');
+            return [];
         }
 
         const offers = normalizePollBodyToOffers(body, log);
@@ -145,8 +150,8 @@ async function fetchFromKayak(input, log) {
         return offers;
     } catch (e) {
         if (browser) await browser.close().catch(() => {});
-        log.warn('Kayak fetch failed: ' + (e && e.message));
-        throw e;
+        log.warn('Kayak fetch failed (returning 0 offers): ' + (e && e.message));
+        return [];
     }
 }
 
