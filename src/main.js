@@ -5,7 +5,8 @@
  * Output: filtered and sorted items in the default dataset.
  */
 
-const { Actor } = require('apify');
+const { Actor, log: apifyLog } = require('apify');
+const log = apifyLog && typeof apifyLog.info === 'function' ? apifyLog : { info: (...args) => console.log(...args), debug: console.log, warn: console.warn, error: console.error };
 
 // Same OTA/airline domains as backend DirectOnlyFilterService
 const OTA_DOMAINS = new Set([
@@ -192,12 +193,12 @@ Actor.main(async () => {
     const { flightOffers = [], sortBy = SORT_OPTIONS.price_asc } = input;
 
     if (!Array.isArray(flightOffers) || flightOffers.length === 0) {
-        Actor.log.info('No flight offers to process.');
+        log.info('No flight offers to process.');
         return;
     }
 
     const filtered = applyFilters(flightOffers, input);
-    Actor.log.info(`Filtered: ${flightOffers.length} -> ${filtered.length} offers`);
+    log.info(`Filtered: ${flightOffers.length} -> ${filtered.length} offers`);
 
     const validSort = Object.values(SORT_OPTIONS).includes(sortBy) ? sortBy : SORT_OPTIONS.price_asc;
     const sorted = [...filtered].sort((a, b) => compare(validSort, a, b));
@@ -205,5 +206,5 @@ Actor.main(async () => {
     for (const item of sorted) {
         await Actor.pushData(item);
     }
-    Actor.log.info(`Filtered and sorted ${sorted.length} flight offers by: ${validSort}`);
+    log.info(`Filtered and sorted ${sorted.length} flight offers by: ${validSort}`);
 });
