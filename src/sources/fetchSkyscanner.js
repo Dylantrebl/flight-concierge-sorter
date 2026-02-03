@@ -124,19 +124,28 @@ async function fetchFromSkyscanner(input, log) {
         browser = await chromium.launch(launchOptions);
         const page = await browser.newPage();
 
-        const responsePromise = page.waitForResponse(
-            (resp) => {
-                if (!resp.ok()) return false;
-                if (!isResultsApiUrl(resp.url())) return false;
-                const ct = (resp.headers()['content-type'] || '').toLowerCase();
-                return ct.includes('application/json');
-            },
-            { timeout: INTERCEPT_TIMEOUT_MS }
-        );
+        const responsePromise = page
+            .waitForResponse(
+                (resp) => {
+                    if (!resp.ok()) return false;
+                    if (!isResultsApiUrl(resp.url())) return false;
+                    const ct = (resp.headers()['content-type'] || '').toLowerCase();
+                    return ct.includes('application/json');
+                },
+                { timeout: INTERCEPT_TIMEOUT_MS }
+            )
+            .catch((err) => {
+                log.warn('Skyscanner fetch failed (returning 0 offers): ' + (err?.message));
+                return null;
+            });
 
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
         const response = await responsePromise;
+        if (response === null) {
+            await browser.close().catch(() => {});
+            return [];
+        }
         const body = await response.json();
 
         if (!hasFlightData(body)) {

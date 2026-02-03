@@ -126,14 +126,23 @@ async function fetchFromKayak(input, log) {
         browser = await chromium.launch(launchOptions);
         const page = await browser.newPage();
 
-        const responsePromise = page.waitForResponse(
-            (resp) => isPollUrl(resp.url()) && resp.ok(),
-            { timeout: INTERCEPT_TIMEOUT_MS }
-        );
+        const responsePromise = page
+            .waitForResponse(
+                (resp) => isPollUrl(resp.url()) && resp.ok(),
+                { timeout: INTERCEPT_TIMEOUT_MS }
+            )
+            .catch((err) => {
+                log.warn('Kayak fetch failed (returning 0 offers): ' + (err?.message));
+                return null;
+            });
 
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
         const response = await responsePromise;
+        if (response === null) {
+            await browser.close().catch(() => {});
+            return [];
+        }
         const body = await response.json();
 
         if (!hasFlightData(body)) {
