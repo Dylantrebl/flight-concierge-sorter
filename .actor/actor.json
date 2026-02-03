@@ -1,0 +1,12 @@
+{
+  "actorSpecification": 1,
+  "name": "flight-concierge-sorter",
+  "title": "Flight Concierge Sorter",
+  "description": "Sorts flight offers by price, duration, stops, or departure time. Accepts an array of flight-like items (e.g. from other Apify actors or your API) and outputs the same items in the chosen order.",
+  "version": "1.0.0",
+  "meta": {
+    "templateId": "js-start"
+  },
+  "input": "./input_schema.json",
+  "dockerfile": "./Dockerfile"
+}

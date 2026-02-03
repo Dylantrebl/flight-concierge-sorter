@@ -1,0 +1,57 @@
+{
+  "title": "Flight Concierge Sorter input",
+  "description": "Provide flight offers (from another actor or API) and choose how to sort them. Output is the same items in sorted order.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "flightOffers": {
+      "title": "Flight offers",
+      "type": "array",
+      "description": "Array of flight offer objects. Each item should have at least one of: price (or price.amount), totalDurationMinutes, stops, legs (with departure times). Compatible with Skyscanner/Kayak Apify actor output.",
+      "editor": "json",
+      "prefill": [
+        {
+          "price": { "amount": 250, "currency": "USD" },
+          "totalDurationMinutes": 320,
+          "stops": 0,
+          "legs": [{ "departure": { "time": "2025-03-15T08:00:00" } }]
+        },
+        {
+          "price": { "amount": 180, "currency": "USD" },
+          "totalDurationMinutes": 420,
+          "stops": 1,
+          "legs": [{ "departure": { "time": "2025-03-15T06:30:00" } }]
+        }
+      ]
+    },
+    "sortBy": {
+      "title": "Sort by",
+      "type": "string",
+      "description": "How to order the flight offers.",
+      "default": "price_asc",
+      "enum": [
+        "price_asc",
+        "price_desc",
+        "duration_asc",
+        "duration_desc",
+        "stops_asc",
+        "stops_desc",
+        "departure_asc",
+        "departure_desc",
+        "score_desc"
+      ],
+      "enumTitles": [
+        "Price (low to high)",
+        "Price (high to low)",
+        "Duration (shortest first)",
+        "Duration (longest first)",
+        "Stops (fewest first)",
+        "Stops (most first)",
+        "Departure (earliest first)",
+        "Departure (latest first)",
+        "Preference score (best first)"
+      ]
+    }
+  },
+  "required": ["flightOffers", "sortBy"]
+}

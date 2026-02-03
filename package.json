@@ -1,0 +1,15 @@
+{
+  "name": "flight-concierge-sorter",
+  "version": "1.0.0",
+  "description": "Flight Concierge custom Apify actor: sort flight offers by price, duration, stops, or departure.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "echo \"Run with: apify run\" && exit 0"
+  },
+  "author": "Flight Concierge",
+  "license": "MIT",
+  "dependencies": {
+    "apify": "^3.4.0"
+  }
+}
