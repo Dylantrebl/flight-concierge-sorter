@@ -213,10 +213,14 @@ Actor.main(async () => {
 
     if (flightOffers.length === 0 && isSearchMode(input)) {
         log.info('Search mode: fetching from Skyscanner and Kayak (no third-party actors).');
-        const [skyscannerOffers, kayakOffers] = await Promise.all([
+        const [skyscannerSettled, kayakSettled] = await Promise.allSettled([
             fetchFromSkyscanner(input, log),
             fetchFromKayak(input, log)
         ]);
+        const skyscannerOffers = skyscannerSettled.status === 'fulfilled' ? skyscannerSettled.value : [];
+        const kayakOffers = kayakSettled.status === 'fulfilled' ? kayakSettled.value : [];
+        if (skyscannerSettled.status === 'rejected') log.warn('Skyscanner fetch rejected:', skyscannerSettled.reason?.message);
+        if (kayakSettled.status === 'rejected') log.warn('Kayak fetch rejected:', kayakSettled.reason?.message);
         flightOffers = [
             ...addIds(skyscannerOffers, 'skyscanner'),
             ...addIds(kayakOffers, 'kayak')
