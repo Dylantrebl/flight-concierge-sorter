@@ -8,30 +8,35 @@
       "title": "Origin (IATA)",
       "type": "string",
       "description": "Departure airport code (e.g. JFK, LAX). Used in search mode to fetch from Skyscanner and Kayak.",
+      "editor": "textfield",
       "nullable": true
     },
     "destination": {
       "title": "Destination (IATA)",
       "type": "string",
       "description": "Arrival airport code. Used in search mode.",
+      "editor": "textfield",
       "nullable": true
     },
     "departDate": {
       "title": "Depart date",
       "type": "string",
       "description": "Outbound date YYYY-MM-DD. Used in search mode.",
+      "editor": "textfield",
       "nullable": true
     },
     "returnDate": {
       "title": "Return date",
       "type": "string",
       "description": "Return date YYYY-MM-DD (optional, one-way if omitted).",
+      "editor": "textfield",
       "nullable": true
     },
     "adults": {
       "title": "Adults",
       "type": "integer",
       "description": "Number of adult passengers (search mode).",
+      "editor": "number",
       "default": 1,
       "minimum": 1,
       "nullable": true
@@ -40,6 +45,7 @@
       "title": "Currency",
       "type": "string",
       "description": "Currency code (e.g. USD). Used in search mode.",
+      "editor": "textfield",
       "default": "USD",
       "nullable": true
     },
@@ -47,6 +53,7 @@
       "title": "Cabin class",
       "type": "string",
       "description": "economy, premium-economy, business, first.",
+      "editor": "select",
       "default": "economy",
       "enum": ["economy", "premium-economy", "business", "first"],
       "nullable": true
@@ -62,6 +69,7 @@
       "title": "Sort by",
       "type": "string",
       "description": "How to order the flight offers.",
+      "editor": "select",
       "default": "price_asc",
       "enum": [
         "price_asc",
@@ -86,10 +94,10 @@
         "Preference score (best first)"
       ]
     },
-    "maxPrice": { "title": "Max price", "type": "number", "nullable": true },
-    "minPrice": { "title": "Min price", "type": "number", "nullable": true },
-    "maxStops": { "title": "Max stops", "type": "integer", "nullable": true, "minimum": 0 },
-    "directOnly": { "title": "Direct airline only", "type": "boolean", "default": false },
+    "maxPrice": { "title": "Max price", "type": "number", "editor": "number", "nullable": true },
+    "minPrice": { "title": "Min price", "type": "number", "editor": "number", "nullable": true },
+    "maxStops": { "title": "Max stops", "type": "integer", "editor": "number", "nullable": true, "minimum": 0 },
+    "directOnly": { "title": "Direct airline only", "type": "boolean", "editor": "checkbox", "default": false },
     "includeAirlines": { "title": "Include airlines", "type": "array", "editor": "stringList", "nullable": true },
     "excludeAirlines": { "title": "Exclude airlines", "type": "array", "editor": "stringList", "nullable": true }
   },
