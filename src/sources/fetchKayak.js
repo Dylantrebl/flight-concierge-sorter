@@ -1,11 +1,15 @@
 /**
- * Fetch flight offers from Kayak by scraping the website.
- * No third-party Apify actors – uses Playwright in this actor.
+ * Fetch flight offers from Kayak using Hybrid Interception.
+ * No HTML parsing – intercept the internal JSON API response (/s/horizon/flights/results/Poll).
+ * Uses residential proxy and closes the browser immediately after capturing JSON.
  */
 
 const { chromium } = require('playwright');
+const { Actor } = require('apify');
 
 const BASE = 'https://www.kayak.com';
+const POLL_URL_SUBSTRING = '/s/horizon/flights/results/Poll';
+const INTERCEPT_TIMEOUT_MS = 45000;
 
 function buildSearchUrl(origin, destination, departDate, returnDate, adults = 1, cabinClass = 'economy') {
     const o = (origin || '').toUpperCase().replace(/\s/g, '');
@@ -19,59 +23,69 @@ function buildSearchUrl(origin, destination, departDate, returnDate, adults = 1,
     return BASE + path;
 }
 
-async function extractOffers(page) {
-    return page.evaluate(() => {
-        const offers = [];
-        try {
-            const scripts = document.querySelectorAll('script#__NEXT_DATA__, script[type="application/json"]');
-            for (const el of scripts) {
-                if (!el.textContent) continue;
-                try {
-                    const data = JSON.parse(el.textContent);
-                    const props = data.props?.pageProps || data.props || {};
-                    const searchResults = props.searchResults || props.results || props.data?.searchResults;
-                    const listings = searchResults?.listings || searchResults?.flights || searchResults?.itineraries || [];
-                    if (Array.isArray(listings) && listings.length > 0) {
-                        listings.slice(0, 50).forEach(it => {
-                            const price = it.price?.value ?? it.totalPrice?.amount ?? it.amount ?? 0;
-                            const segments = it.segments || it.legs || it.slices || [];
-                            offers.push({
-                                price: { amount: Number(price), currency: it.price?.currency || it.currency || 'USD' },
-                                totalDurationMinutes: it.duration || it.totalDuration || segments.reduce((s, seg) => s + (seg.duration || 0), 0),
-                                stops: Math.max(0, (segments.length || 1) - 1),
-                                legs: segments.map(seg => ({
-                                    carrier: seg.carrier?.code || seg.operatingCarrier?.code || seg.marketingCarrier?.code,
-                                    departure: seg.departure ? { airport: seg.departure.airport?.code || seg.origin, time: seg.departure.time || seg.departure.dateTime } : undefined,
-                                    arrival: seg.arrival ? { airport: seg.arrival.airport?.code || seg.destination, time: seg.arrival.time || seg.arrival.dateTime } : undefined,
-                                    durationMinutes: seg.duration
-                                })),
-                                bookingUrl: it.bookingUrl || it.deeplink || it.url || 'https://www.kayak.com/flights'
-                            });
-                        });
-                        if (offers.length > 0) return offers;
-                    }
-                } catch (_) {}
-            }
-            if (window.__INITIAL_STATE__?.search?.results?.listings) {
-                window.__INITIAL_STATE__.search.results.listings.slice(0, 50).forEach(it => {
-                    offers.push({
-                        price: { amount: it.price?.value ?? 0, currency: 'USD' },
-                        totalDurationMinutes: it.duration || 0,
-                        stops: Math.max(0, (it.segments?.length || 1) - 1),
-                        legs: (it.segments || []).map(s => ({ carrier: s.carrier?.code, departure: s.departure, arrival: s.arrival, durationMinutes: s.duration })),
-                        bookingUrl: it.bookingUrl || 'https://www.kayak.com/flights'
-                    });
-                });
-            }
-        } catch (e) {
-            console.warn('Kayak extract error', e);
-        }
-        return offers;
-    });
+/**
+ * Check if the intercepted JSON contains actual flight data (itineraryId or itineraries).
+ */
+function hasFlightData(body) {
+    if (!body || typeof body !== 'object') return false;
+    if (body.itineraryId != null) return true;
+    const itineraries = body.itineraries || body.results?.itineraries || body.data?.itineraries;
+    if (Array.isArray(itineraries) && itineraries.length > 0) return true;
+    const listings = body.listings || body.results?.listings || body.data?.listings;
+    if (Array.isArray(listings) && listings.length > 0) return true;
+    return false;
 }
 
 /**
- * @param {{ origin: string, destination: string, departDate: string, returnDate?: string, adults?: number, currency?: string, cabinClass?: string }} input
+ * Normalize Kayak Poll response to our flight-offer shape.
+ * Handles common internal shapes (itineraries, listings, legs, segments).
+ */
+function normalizePollBodyToOffers(body, log) {
+    const offers = [];
+    const itineraries = body.itineraries || body.results?.itineraries || body.data?.itineraries
+        || body.listings || body.results?.listings || body.data?.listings || [];
+    if (!Array.isArray(itineraries)) return offers;
+
+    for (const it of itineraries) {
+        try {
+            const priceObj = it.price || it.totalPrice || it.pricing?.options?.[0];
+            const amount = priceObj?.value ?? priceObj?.amount ?? it.amount ?? 0;
+            const currency = priceObj?.currency || it.currency || body.currency || 'USD';
+            const segments = it.segments || it.legs || it.slices || it.flights || [];
+            const totalDuration = it.duration ?? it.totalDuration ?? segments.reduce((s, seg) => s + (seg.duration || seg.durationMinutes || 0), 0);
+
+            offers.push({
+                price: { amount: Number(amount), currency },
+                totalDurationMinutes: totalDuration,
+                stops: Math.max(0, (segments.length || 1) - 1),
+                legs: segments.map(seg => ({
+                    carrier: seg.carrier?.code || seg.operatingCarrier?.code || seg.marketingCarrier?.code || seg.carrierId,
+                    departure: seg.departure ? {
+                        airport: seg.departure.airport?.code || seg.departure.origin?.code || seg.origin,
+                        time: seg.departure.time || seg.departure.dateTime || seg.departure.datetime
+                    } : undefined,
+                    arrival: seg.arrival ? {
+                        airport: seg.arrival.airport?.code || seg.arrival.destination?.code || seg.destination,
+                        time: seg.arrival.time || seg.arrival.dateTime || seg.arrival.datetime
+                    } : undefined,
+                    durationMinutes: seg.duration ?? seg.durationMinutes
+                })),
+                bookingUrl: it.bookingUrl || it.deeplink || it.url || 'https://www.kayak.com/flights',
+                rawItineraryId: it.itineraryId || it.id
+            });
+        } catch (e) {
+            log.debug('Kayak: skip one itinerary parse error', e?.message);
+        }
+    }
+    return offers;
+}
+
+/**
+ * Fetch from Kayak via Hybrid Interception: goto page, wait for Poll JSON, normalize, close browser.
+ * Uses residential proxy when running on Apify. Throws after 45s if no flight data (triggers retry with new IP).
+ *
+ * @param {{ origin: string, destination: string, departDate: string, returnDate?: string, adults?: number, cabinClass?: string }} input
+ * @param {{ info: Function, warn: Function, debug?: Function }} log
  * @returns {Promise<Array<object>>}
  */
 async function fetchFromKayak(input, log) {
@@ -87,21 +101,52 @@ async function fetchFromKayak(input, log) {
         log.warn('Kayak: missing origin, destination or departDate');
         return [];
     }
-    log.info('Kayak: fetching ' + url);
+    log.info('Kayak: fetching ' + url + ' (intercepting Poll response)');
+
     let browser;
     try {
-        browser = await chromium.launch({ headless: true });
+        let launchOptions = { headless: true };
+        try {
+            const proxyConfiguration = await Actor.createProxyConfiguration({ groups: ['RESIDENTIAL'] });
+            if (proxyConfiguration) {
+                const proxyUrl = await proxyConfiguration.newUrl();
+                if (proxyUrl) {
+                    launchOptions.proxy = { server: proxyUrl };
+                    log.info('Kayak: using residential proxy');
+                }
+            }
+        } catch (proxyErr) {
+            log.warn('Kayak: proxy config failed, continuing without proxy', proxyErr?.message);
+        }
+
+        browser = await chromium.launch(launchOptions);
         const page = await browser.newPage();
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 }).catch(() => {});
-        await page.waitForTimeout(10000);
-        const offers = await extractOffers(page);
+
+        const responsePromise = page.waitForResponse(
+            (resp) => resp.url().includes(POLL_URL_SUBSTRING) && resp.ok(),
+            { timeout: INTERCEPT_TIMEOUT_MS }
+        );
+
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+        const response = await responsePromise;
+        const body = await response.json();
+
+        if (!hasFlightData(body)) {
+            await browser.close().catch(() => {});
+            throw new Error('Kayak: No flight data in Poll response (missing itineraryId/itineraries). Retry with new proxy.');
+        }
+
+        const offers = normalizePollBodyToOffers(body, log);
+        log.info('Data captured. Closing browser...');
         await browser.close().catch(() => {});
-        log.info('Kayak: extracted ' + offers.length + ' offers');
+
+        log.info('Kayak: intercepted and normalized ' + offers.length + ' offers');
         return offers;
     } catch (e) {
-        log.warn('Kayak fetch failed: ' + (e && e.message));
         if (browser) await browser.close().catch(() => {});
-        return [];
+        log.warn('Kayak fetch failed: ' + (e && e.message));
+        throw e;
     }
 }
 
