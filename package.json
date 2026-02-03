@@ -1,7 +1,7 @@
 {
   "name": "flight-concierge-sorter",
-  "version": "1.0.0",
-  "description": "Flight Concierge custom Apify actor: sort flight offers by price, duration, stops, or departure.",
+  "version": "2.0.0",
+  "description": "Flight Concierge Apify actor: fetch from Skyscanner & Kayak, then filter and sort. No third-party actors.",
   "main": "src/main.js",
   "scripts": {
     "start": "node src/main.js",
@@ -10,6 +10,7 @@
   "author": "Flight Concierge",
   "license": "MIT",
   "dependencies": {
-    "apify": "^3.4.0"
+    "apify": "^3.4.0",
+    "playwright": "^1.40.0"
   }
 }

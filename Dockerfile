@@ -1,5 +1,5 @@
-# Flight Concierge Sorter - custom Apify actor
-FROM apify/actor-node:20
+# Flight Concierge Sorter - fetches Skyscanner + Kayak with Playwright, then filter+sort
+FROM apify/actor-node-playwright-chrome:20
 
 COPY package*.json ./
 

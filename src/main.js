@@ -1,12 +1,14 @@
 /**
  * Flight Concierge Sorter - Custom Apify Actor
- * Filters and sorts flight offers using the same criteria as Flight Concierge:
- * maxPrice, minPrice, maxStops, directOnly, includeAirlines, excludeAirlines + sortBy.
- * Output: filtered and sorted items in the default dataset.
+ * Two modes:
+ * 1) Search mode: provide origin, destination, departDate – actor fetches from Skyscanner and Kayak itself (no third-party actors), then filters and sorts.
+ * 2) Sort-only mode: provide flightOffers – only filter and sort.
  */
 
 const { Actor, log: apifyLog } = require('apify');
 const log = apifyLog && typeof apifyLog.info === 'function' ? apifyLog : { info: (...args) => console.log(...args), debug: console.log, warn: console.warn, error: console.error };
+const { fetchFromSkyscanner } = require('./sources/fetchSkyscanner');
+const { fetchFromKayak } = require('./sources/fetchKayak');
 
 // Same OTA/airline domains as backend DirectOnlyFilterService
 const OTA_DOMAINS = new Set([
@@ -188,11 +190,41 @@ function compare(sortBy, a, b) {
     }
 }
 
+function isSearchMode(input) {
+    const o = input.origin && String(input.origin).trim();
+    const d = input.destination && String(input.destination).trim();
+    const date = input.departDate && String(input.departDate).trim();
+    return o && d && date;
+}
+
+function addIds(offers, prefix) {
+    return offers.map((item, i) => ({
+        ...item,
+        id: item.id || `${prefix}-${Date.now()}-${i}`,
+        providerId: item.providerId || prefix
+    }));
+}
+
 Actor.main(async () => {
     const input = await Actor.getInput();
-    const { flightOffers = [], sortBy = SORT_OPTIONS.price_asc } = input;
+    const { flightOffers: inputOffers, sortBy = SORT_OPTIONS.price_asc } = input;
 
-    if (!Array.isArray(flightOffers) || flightOffers.length === 0) {
+    let flightOffers = Array.isArray(inputOffers) ? inputOffers : [];
+
+    if (flightOffers.length === 0 && isSearchMode(input)) {
+        log.info('Search mode: fetching from Skyscanner and Kayak (no third-party actors).');
+        const [skyscannerOffers, kayakOffers] = await Promise.all([
+            fetchFromSkyscanner(input, log),
+            fetchFromKayak(input, log)
+        ]);
+        flightOffers = [
+            ...addIds(skyscannerOffers, 'skyscanner'),
+            ...addIds(kayakOffers, 'kayak')
+        ];
+        log.info('Combined ' + skyscannerOffers.length + ' Skyscanner + ' + kayakOffers.length + ' Kayak = ' + flightOffers.length + ' offers.');
+    }
+
+    if (!flightOffers || flightOffers.length === 0) {
         log.info('No flight offers to process.');
         return;
     }
